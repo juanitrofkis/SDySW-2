@@ -104,7 +104,7 @@ DEVUELVE UNA LISTA CON TODOS LOS PRODUCTOS
     public List<Producto> listarProductos()
     {
         List<Producto> resultado = new LinkedList<Producto>();
-		ResultSet rs = stmt.executeQuery("SELECT * FROM INVENTARIO;");
+		ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO;")
 
         while (rs.next()) {
 			Producto producto = new ProductoImpl(rs.getFloat("PRECIO"), rs.getString("NOMBRE"), rs.getInt("ID"), rs.getInt("CANTIDAD"));
