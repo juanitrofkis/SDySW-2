@@ -44,15 +44,42 @@ SACA UN PRODUCTO SEGUN EL ID QUE SE LE PASE
 *****************************************************************************************************************/
 
     @GetMapping("/tienda/comprar") 
-    public Producto compraProducto(@RequestParam String id, @RequestParam String cantidad) 
+    public ResponseEntity<String> compraProducto(@RequestParam int id, @RequestParam int cantidad, @RequestParam float cambio) 
     {
-        String name;
+		Producto producto = null;
+		ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO WHERE ID="+id);
+		if (rs.next() && cantidad >= 0) {
+			if (cantidad >=1){
+				producto = new ProductoImpl(rs.getFloat("PRECIO"), rs.getString("NOMBRE"), rs.getInt("ID"), rs.getInt("CANTIDAD"));
+				int n = rs.getInt("CANTIDAD");
+				if (n>=cantidad) {
+					// se decrementa el número de unidades
+					st.executeUpdate("UPDATE INVENTARIO SET CANTIDAD="+(n-cantidad)+" WHERE ID="+id+";");
+				} else {
+					return ResponseEntity.badRequest().body("No se ha podido actualizar la compra");	
+				} 
+			}
+		}
+		//Actualizamos la cuenta 
+		ResultSet rs2 = st.executeQuery("SELECT TOTAL FROM CUENTAS WHERE ID=0");
+		float cuenta = rs2.getFloat(TOTAL);
+		if((0-cambio) > cuenta) 
+			return ResponseEntity.badRequest().body("Se ha intentado extraer una cantidad de cambio superior al dinero almacenado");	
+		
+		float total =cuenta+cambio;
+		st.executeUpdate("UPDATE CUENTAS SET TOTAL="+total+" WHERE ID=0;");
+		return ResponseEntity.ok("Se ha efectuado de manera correcta la comprar con ID: "+ id);
+		rs.close();
+		rs2.close();
+
+
+		/* Esto es de Amando 
+		String name;
         int idProducto;
         int cantidadProducto;
         float precio;
 
-			ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO WHERE ID="+id);
-
+		ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO WHERE ID="+id);
             // ¿La cantidad como la modificaria en la BBDD?
 			
             while(rs.next())
@@ -66,36 +93,58 @@ SACA UN PRODUCTO SEGUN EL ID QUE SE LE PASE
 			rs.close();
 
 			return new Producto(idProducto, name, cantidadProducto, precio);
-		 
+		 */
 		
     }
 
-/*****************************************************************************************************************
-DEVUELVE AL INVENTARIO UNA CANTIDAD DEL PRODUCTO CON LA ID PASADA 
-*****************************************************************************************************************/
-            
-    @PutMapping("/tienda/devolver")
-    public String devuelveProducto(@RequestParam String id, @RequestParam String cantidad)
-    {
-        int cantidadAnterior;
-        int cantidadNueva;
-        
-
-        ResultSet rs = st.executeQuery("SELECT CANTIDAD FROM INVENTARIO WHERE ID="+id+";");
-        if (rs.next()) {
-            cantidadAnterior = rs.getInt("CANTIDAD");
+	/*****************************************************************************************************************
+	DEVUELVE AL INVENTARIO UNA CANTIDAD DEL PRODUCTO CON LA ID PASADA 
+	*****************************************************************************************************************/
+				
+		@PutMapping("/tienda/devolver")
+		public ResponseEntity<String> devuelveProducto(@RequestParam int id, @RequestParam int cantidad)
+		{
 			
+			ResultSet rs = st.executeQuery("SELECT CANTIDAD FROM INVENTARIO WHERE ID="+id+";");
+			if (rs.next()) {
+				st.executeUpdate("UPDATE INVENTARIO SET CANTIDAD="+(rs.getInt("CANTIDAD")+cantidad)+" WHERE ID="+id+";");
+				
+			}else
+				return ResponseEntity.badRequest().body("No se ha podido añadir a la base de datos la cantidad "+cantidad);
+					//Actualizamos la cuenta 
+			ResultSet rs2 = st.executeQuery("SELECT TOTAL FROM CUENTAS WHERE ID=0");
+			float cuenta = rs2.getFloat(TOTAL);
+			if((0-cambio) > cuenta) 
+			return ResponseEntity.badRequest().body("Se ha intentado extraer una cantidad de cambio superior al dinero almacenado");	
+		
+			float total =cuenta+cambio;
+			st.executeUpdate("UPDATE CUENTAS SET TOTAL="+total+" WHERE ID=0;");
+			return ResponseEntity.ok("Se ha efectuado de manera correcta la devolución con ID: "+ id);
+			rs.close();
+			rs2.close();
+			
+			
+			
+			/* 
+			int cantidadAnterior;
+			int cantidadNueva;
+			
+	
+			ResultSet rs = st.executeQuery("SELECT CANTIDAD FROM INVENTARIO WHERE ID="+id+";");
+			if (rs.next()) {
+				cantidadAnterior = rs.getInt("CANTIDAD");
+				
+			}
+	
+			cantidadNueva = cantidadAnterior + cantidad;
+			st.executeUpdate("UPDATE INVENTARIO SET CANTIDAD="+ cantidadNueva + " WHERE ID="+ id +";");
+	
+			rs.close();
+	
+			return "La cantidad de producto: " + cantidad + "con ID: " + id + "ha sido devuelta";
+			*/
 		}
-
-        cantidadNueva = cantidadAnterior + cantidad;
-        st.executeUpdate("UPDATE INVENTARIO SET CANTIDAD="+ cantidadNueva + " WHERE ID="+ id +";");
-
-		rs.close();
-
-        return "La cantidad de producto: " + cantidad + "con ID: " + id + "ha sido devuelta";
-
-    }
-
+	
 /*****************************************************************************************************************
 DEVUELVE UNA LISTA CON TODOS LOS PRODUCTOS
 *****************************************************************************************************************/
@@ -115,7 +164,9 @@ DEVUELVE UNA LISTA CON TODOS LOS PRODUCTOS
         return resultado; //Devuelvo lista de Productos
     }
 
-
+/*****************************************************************************************************************
+AÑADE UN PRODUCTO NUEVO A LA BASE DE DATOS
+*****************************************************************************************************************/
 
     @PostMapping("/tienda/addNewProduc") 
     public ResponseEntity<String> addProductoNew(@RequestBody Producto producto) 
@@ -150,6 +201,9 @@ DEVUELVE UNA LISTA CON TODOS LOS PRODUCTOS
 		rs.close();
     }
 
+/*****************************************************************************************************************
+AÑADE UN PRODUCTO A LA BASE DE DATOS
+*****************************************************************************************************************/
 
     @PutMapping("/tienda/addProd") 
     public ResponseEntity<String> addProducto(@RequestBody Producto producto) 
@@ -169,6 +223,11 @@ DEVUELVE UNA LISTA CON TODOS LOS PRODUCTOS
 		rs.close();	
 	
     }
+
+/*****************************************************************************************************************
+ELIMINA UN PRODUCTO A LA BASE DE DATOS
+*****************************************************************************************************************/
+
     @DeleteMapping("/tienda/eliminarProd") 
     public ResponseEntity<String> deleteProducto(@RequestBody Producto producto) 
     {
@@ -181,7 +240,12 @@ DEVUELVE UNA LISTA CON TODOS LOS PRODUCTOS
 		rs.close();
 		
     }
-    @GetMapping("/tienda/cashFlow") 
+
+/*****************************************************************************************************************
+OBTIENE EL FLUJO DE CAJA DE LA BASE DE DATOS
+*****************************************************************************************************************/
+    
+	@GetMapping("/tienda/cashFlow") 
     public ResponseEntity<String> cashFlow() 
     {
 
@@ -197,7 +261,10 @@ DEVUELVE UNA LISTA CON TODOS LOS PRODUCTOS
 		 
 		
     }
-	//cerramos la conexión a la base de datos
+	
+/*****************************************************************************************************************
+CERRAMOS LA CONEXION A LA BASE DE DATOS
+*****************************************************************************************************************/
 	protected void finalize() throws Throwable{
 		try {
 			st.close();
