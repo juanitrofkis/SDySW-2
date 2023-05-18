@@ -228,10 +228,9 @@ AÑADE UN PRODUCTO A LA BASE DE DATOS
 ELIMINA UN PRODUCTO A LA BASE DE DATOS
 *****************************************************************************************************************/
 
-    @DeleteMapping("/tienda/eliminarProd") 
-    public ResponseEntity<String> deleteProducto(@RequestBody Producto producto) 
+    @GetMapping("/tienda/eliminarProd") 
+    public ResponseEntity<String> deleteProducto(@RequestParam int id) 
     {
-	    int id = producto.getId();
 	    ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO WHERE ID ="+id);
 		if (!rs.next())
 			return ResponseEntity.ok("El producto se ha elimando correctamente.");
@@ -261,7 +260,7 @@ OBTIENE EL FLUJO DE CAJA DE LA BASE DE DATOS
 		 
 		
     }
-	
+
 /*****************************************************************************************************************
 CERRAMOS LA CONEXION A LA BASE DE DATOS
 *****************************************************************************************************************/
