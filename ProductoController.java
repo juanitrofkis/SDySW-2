@@ -167,7 +167,7 @@ AÑADE UN PRODUCTO NUEVO A LA BASE DE DATOS
 *****************************************************************************************************************/
 
     @PostMapping("/tienda/addNewProduc") 
-    public ResponseEntity<String> addProductoNew(@RequestBody Producto producto) 
+    public int addProductoNew(@RequestBody Producto producto) 
     {
 		//Obtenemos el ID más alto y le sumamos 1
 		int id=0;
@@ -175,7 +175,7 @@ AÑADE UN PRODUCTO NUEVO A LA BASE DE DATOS
 		ResultSet rs = st.executeQuery("SELECT MAX(ID) AS ID FROM INVENTARIO;");
 		
 		
-		if (rs.next() && cantidad >= 1) {
+		if (rs.next() && cantidad >= 1){
 			id = rs.getInt("ID")+1;
 			ResultSet rs2 = st.executeQuery("SELECT NOMBRE FROM INVENTARIO;");
 			Boolean repetido = false;
@@ -184,19 +184,20 @@ AÑADE UN PRODUCTO NUEVO A LA BASE DE DATOS
 					repetido = true;
 			
 			if (repetido) {
-				return ResponseEntity.badRequest().body("Este producto ya existe en la base de datos");
+				System.out.println("Este producto ya existe en la base de datos");
 			}
 			else
 				st.executeUpdate("INSERT INTO INVENTARIO (ID,NOMBRE,PRECIO,CANTIDAD)"
-								+ " VALUES("+id+",'"+nombre+"',"+precio+","+cantidad+");");
+								+ " VALUES("+id+",'"+?+"',"+?+","+?+");");
 				st.setString(1, producto.getNombre());
 				st.setFloat(2, producto.getPrecio());
 				st.setInt(3, producto.getCantidad());
 		} else if (producto.getCantidad() < 1)
-			return ResponseEntity.badRequest().body("La cantidad tiene que ser mayor o igual a 1");
-		return ResponseEntity.ok("El producto se ha agregado correctamente. ID: "+ id);
+			System.out.println("La cantidad tiene que ser mayor o igual a 1");
+		System.out.println("El producto se ha agregado correctamente. ID: "+ id);
 		rs2.close();
 		rs.close();
+		return id;
     }
 
 /*****************************************************************************************************************
@@ -204,20 +205,19 @@ AÑADE UN PRODUCTO A LA BASE DE DATOS
 *****************************************************************************************************************/
 
     @PutMapping("/tienda/addProd") 
-    public ResponseEntity<String> addProducto(@RequestBody Producto producto) 
+    public void addProducto(@RequestBody Producto producto) 
     {
 		
 		int cantidad = producto.getCantidad();
 		int id = producto.getId();
 		ResultSet rs = st.executeQuery("SELECT CANTIDAD FROM INVENTARIO WHERE ID="+id+";");
-		st.setInt(1, producto.getId());
 		if (rs.next()) {
 			st.executeUpdate("UPDATE INVENTARIO SET CANTIDAD="+(rs.getInt("CANTIDAD")+cantidad)+" WHERE ID="+id+";");
 			
 		}else
-			return ResponseEntity.badRequest().body("No se puedo introducir el prodcuto correctamente");
+			System.out.println("No se ha podido añadir el producto con id '"+id+"'.");
 		
-		return ResponseEntity.ok("El producto se ha agregado correctamente. ID: "+ producto.getId());
+		System.out.println("El producto se ha agregado correctamente. ID: "+id);
 		rs.close();	
 	
     }
@@ -227,11 +227,11 @@ ELIMINA UN PRODUCTO A LA BASE DE DATOS
 *****************************************************************************************************************/
 
     @GetMapping("/tienda/eliminarProd") 
-    public ResponseEntity<String> deleteProducto(@RequestParam int id) 
+    public void deleteProducto(@RequestParam int id) 
     {
 	    ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO WHERE ID ="+id);
 		if (!rs.next())
-			return ResponseEntity.ok("El producto se ha eliminado correctamente.");
+			System.out.println("el producto con id '"+id+"' no existe.");
 		else
 			st.executeUpdate("DELETE FROM INVENTARIO WHERE ID="+id+";");
 		rs.close();
@@ -243,7 +243,7 @@ OBTIENE EL FLUJO DE CAJA DE LA BASE DE DATOS
 *****************************************************************************************************************/
     
 	@GetMapping("/tienda/cashFlow") 
-    public ResponseEntity<String> cashFlow() 
+    public float cashFlow() 
     {
 
 			ResultSet rs = st.executeQuery("SELECT TOTAL FROM CUENTAS WHERE ID=0");
@@ -251,12 +251,9 @@ OBTIENE EL FLUJO DE CAJA DE LA BASE DE DATOS
 			while(rs.next())
 			{
 				float total = rs.getFloat("flujo_caja");
-				return ResponseEntity.ok("El flujo de caja de la tienda es: "+total);
+				return total;
 			}
 			rs.close();
-			return ResponseEntity.badRequest().body("No se ha podido obtener el flujo de caja");
-		 
-		
     }
 
 /*****************************************************************************************************************
@@ -266,12 +263,14 @@ CERRAMOS LA CONEXION A LA BASE DE DATOS
 		try {
 			st.close();
 		} catch (Exception e) {
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error en el servidor");
+			System.err.println(e.getClass().getName()+": "+e.getMessage());
+			System.exit(0);
 		}
 		try {
 			conn.close();
 		} catch (Exception e) {
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error en el servidor");
+			System.err.println(e.getClass().getName()+": "+e.getMessage());
+			System.exit(0);
 		}
 	}
 	
