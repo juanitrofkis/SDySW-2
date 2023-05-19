@@ -1,4 +1,6 @@
 
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.smartcardio.ResponseAPDU;
@@ -13,25 +15,30 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.restservice.Producto;
+
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Statement;
 
 @RestController
-public class ProductoController implements Producto {
+public class ProductoController {
     private String url = "jdbc:postgresql://localhost:5432/dit";
     private String user = "dit";
     private String pass = "dit";
 
+	Connection conn;
+	Statement st; 
+	
 	public ProductoController() {
-    Producto producto = new Producto();
+    //Producto producto = new Producto();
+	
 	try{	
-		Connection conn = DriverManager.getConnection(url, user, pass);
-		Statement st = conn.createStatement();
+		conn = DriverManager.getConnection(url, user, pass);
+		st = conn.createStatement();
 	} catch (Exception e) {
 			System.err.println(e.getClass().getName()+": "+e.getMessage());
 			System.exit(0);
@@ -40,110 +47,101 @@ public class ProductoController implements Producto {
 	
 
 /*****************************************************************************************************************
-SACA UN PRODUCTO SEGUN EL ID QUE SE LE PASE 
+SACA UN PRODUCTO SEGUN EL ID y CANTIDAD QUE SE LE PASE 
 *****************************************************************************************************************/
 
     @GetMapping("/tienda/comprar") 
-    public ResponseEntity<String> compraProducto(@RequestParam int id, @RequestParam int cantidad, @RequestParam float cambio) 
+    public Producto compraProducto(@RequestParam (value = "id") int id, @RequestParam (value = "cantidad") int cantidad) 
     {
 		Producto producto = null;
-		ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO WHERE ID="+id);
+		ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO WHERE ID="+id+ ";");
+		ResultSet rs2 = st.executeQuery("SELECT PRECIO FROM INVENTARIO WHERE ID=" +id+ ";");
 		if (rs.next() && cantidad >= 0) {
 			if (cantidad >=1){
-				producto = new ProductoImpl(rs.getFloat("PRECIO"), rs.getString("NOMBRE"), rs.getInt("ID"), rs.getInt("CANTIDAD"));
+				producto = new Producto(rs.getFloat("PRECIO"), rs.getString("NOMBRE"), cantidad, rs.getInt("ID"));
 				int n = rs.getInt("CANTIDAD");
 				if (n>=cantidad) {
 					// se decrementa el número de unidades
 					st.executeUpdate("UPDATE INVENTARIO SET CANTIDAD="+(n-cantidad)+" WHERE ID="+id+";");
 				} else {
-					return ResponseEntity.badRequest().body("No se ha podido actualizar la compra");	
+					System.out.println ("No se ha podido actualizar la cantidad");
 				} 
 			}
 		}
-		//Actualizamos la cuenta 
-		ResultSet rs2 = st.executeQuery("SELECT TOTAL FROM CUENTAS WHERE ID=0");
-		float cuenta = rs2.getFloat(TOTAL);
-		if((0-cambio) > cuenta) 
-			return ResponseEntity.badRequest().body("Se ha intentado extraer una cantidad de cambio superior al dinero almacenado");	
-		
-		float total =cuenta+cambio;
+
+		//Actualizamos el cashFlow de la caja, en este caso, al comprar, la caja aumenta su efectivo.
+
+		//Obtengo precio del producto con la id determinada
+		float precioProducto = rs2.getFloat("PRECIO");
+
+		//Obtengo el dinero total que hay en caja
+		ResultSet rs3 = st.executeQuery("SELECT TOTAL FROM CUENTAS WHERE ID=0");
+		float cuenta = rs3.getFloat("TOTAL");
+
+		if((0-precioProducto) > cuenta) 
+		{
+			System.out.println("Se ha intentado extraer una cantidad de cambio superior al dinero almacenado");	
+		}
+		//Nuevo valor de cashFlow = Lo que habia en caja + lo que cuesta el producto elegido por la cantidad comprada
+		float total =cuenta+ (cantidad * precioProducto);
+
 		st.executeUpdate("UPDATE CUENTAS SET TOTAL="+total+" WHERE ID=0;");
-		return ResponseEntity.ok("Se ha efectuado de manera correcta la comprar con ID: "+ id);
+
 		rs.close();
 		rs2.close();
+		rs3.close();
 
-
-		/* Esto es de Amando 
-		String name;
-        int idProducto;
-        int cantidadProducto;
-        float precio;
-
-		ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO WHERE ID="+id);
-            // ¿La cantidad como la modificaria en la BBDD?
-			
-            while(rs.next())
-			{
-                idProducto = rs.getInt("ID");
-                name = rs.getString("NOMBRE");
-                cantidadProducto = cantidad;  //Porque lo qe quiero no es la cantidad que hay en la BBDD, sino la que yo he comprado.
-                precio = rs.getFloat("PRECIO");
-				
-			}
-			rs.close();
-
-			return new Producto(idProducto, name, cantidadProducto, precio);
-		 */
+		return producto;
+	}
 		
-    }
 
-	/*****************************************************************************************************************
-	DEVUELVE AL INVENTARIO UNA CANTIDAD DEL PRODUCTO CON LA ID PASADA 
-	*****************************************************************************************************************/
+
+/*****************************************************************************************************************
+DEVUELVE AL INVENTARIO UNA CANTIDAD DEL PRODUCTO CON LA ID PASADA 
+*****************************************************************************************************************/
 				
-		@PutMapping("/tienda/devolver")
-		public ResponseEntity<String> devuelveProducto(@RequestParam int id, @RequestParam int cantidad)
-		{
+	@PutMapping("/tienda/devolver")
+	public void devuelveProducto(@RequestParam (value = "id") int id, @RequestParam (value = "cantidad") int cantidad)
+	{
 			
-			ResultSet rs = st.executeQuery("SELECT CANTIDAD FROM INVENTARIO WHERE ID="+id+";");
-			if (rs.next()) {
-				st.executeUpdate("UPDATE INVENTARIO SET CANTIDAD="+(rs.getInt("CANTIDAD")+cantidad)+" WHERE ID="+id+";");
-				
-			}else
-				return ResponseEntity.badRequest().body("No se ha podido añadir a la base de datos la cantidad "+cantidad);
-					//Actualizamos la cuenta 
-			ResultSet rs2 = st.executeQuery("SELECT TOTAL FROM CUENTAS WHERE ID=0");
-			float cuenta = rs2.getFloat(TOTAL);
-			if((0-cambio) > cuenta) 
-			return ResponseEntity.badRequest().body("Se ha intentado extraer una cantidad de cambio superior al dinero almacenado");	
-		
-			float total =cuenta+cambio;
-			st.executeUpdate("UPDATE CUENTAS SET TOTAL="+total+" WHERE ID=0;");
-			return ResponseEntity.ok("Se ha efectuado de manera correcta la devolución con ID: "+ id);
-			rs.close();
-			rs2.close();
-			
-			
-			
-			/* 
-			int cantidadAnterior;
-			int cantidadNueva;
-			
-	
-			ResultSet rs = st.executeQuery("SELECT CANTIDAD FROM INVENTARIO WHERE ID="+id+";");
-			if (rs.next()) {
-				cantidadAnterior = rs.getInt("CANTIDAD");
-				
-			}
-	
-			cantidadNueva = cantidadAnterior + cantidad;
-			st.executeUpdate("UPDATE INVENTARIO SET CANTIDAD="+ cantidadNueva + " WHERE ID="+ id +";");
-	
-			rs.close();
-	
-			return "La cantidad de producto: " + cantidad + "con ID: " + id + "ha sido devuelta";
-			*/
+		ResultSet rs = st.executeQuery("SELECT CANTIDAD FROM INVENTARIO WHERE ID="+id+";");
+		ResultSet rs2 = st.executeQuery("SELECT PRECIO FROM INVENTARIO WHERE ID=" +id+ ";");
+		if (rs.next()) {
+			st.executeUpdate("UPDATE INVENTARIO SET CANTIDAD="+(rs.getInt("CANTIDAD")+cantidad)+" WHERE ID="+id+";");
 		}
+		else
+			System.out.println("No se ha podido añadir a la base de datos la cantidad: "+cantidad);
+					
+		//Actualizamos el cashFlow de la caja, en este cajo, al devolver un producto, disminuye el efectivo en caja. 
+		float precioProducto = rs2.getFloat("PRECIO");
+		ResultSet rs3 = st.executeQuery("SELECT TOTAL FROM CUENTAS WHERE ID=0");
+		float cuenta = rs3.getFloat("TOTAL");
+		if((0-precioProducto) > cuenta)
+		{ 
+			System.out.println("Se ha intentado extraer una cantidad de cambio superior al dinero almacenado");	
+		}
+		
+		//Compruebo que la cantidad de dinero a devolver no sea superior al efectivo en caja
+		if ((cuenta - (cantidad * precioProducto)) < 0 )
+		{
+			System.out.println("No hay suficiente efectivo en caja para efectuar la devolucion")
+		}
+		else{
+
+			float total = cuenta - (cantidad * precioProducto);
+			st.executeUpdate("UPDATE CUENTAS SET TOTAL="+total+" WHERE ID=0;");
+			System.out.println("Se ha efectuado de manera correcta la devolución con ID: "+ id);
+		}
+		
+
+		rs.close();
+		rs2.close();
+		rs3.close();
+
+		
+	}
+		
+
 	
 /*****************************************************************************************************************
 DEVUELVE UNA LISTA CON TODOS LOS PRODUCTOS
@@ -153,10 +151,10 @@ DEVUELVE UNA LISTA CON TODOS LOS PRODUCTOS
     public List<Producto> listarProductos()
     {
         List<Producto> resultado = new LinkedList<Producto>();
-		ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO;")
+		ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO;");
 
         while (rs.next()) {
-			Producto producto = new ProductoImpl(rs.getFloat("PRECIO"), rs.getString("NOMBRE"), rs.getInt("ID"), rs.getInt("CANTIDAD"));
+			Producto producto = new Producto(rs.getFloat("PRECIO"), rs.getString("NOMBRE"), rs.getInt("CANTIDAD"), rs.getInt("ID"));
 			resultado.add(producto);
 		}
 		
@@ -233,7 +231,7 @@ ELIMINA UN PRODUCTO A LA BASE DE DATOS
     {
 	    ResultSet rs = st.executeQuery("SELECT * FROM INVENTARIO WHERE ID ="+id);
 		if (!rs.next())
-			return ResponseEntity.ok("El producto se ha elimando correctamente.");
+			return ResponseEntity.ok("El producto se ha eliminado correctamente.");
 		else
 			st.executeUpdate("DELETE FROM INVENTARIO WHERE ID="+id+";");
 		rs.close();
