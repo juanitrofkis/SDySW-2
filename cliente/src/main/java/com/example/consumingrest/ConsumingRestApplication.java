@@ -1,13 +1,17 @@
 package com.example.consumingrest;
+import com.example.producto.Producto;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.http.ResponseEntity;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
+
 
 import java.util.Scanner;
 import java.rmi.RemoteException;
@@ -20,8 +24,6 @@ import java.util.Date;
 @SpringBootApplication
 public class ConsumingRestApplication {
 
-    private static final Logger log = LoggerFactory.getLogger(ConsumingRestApplication.class);
-
 	/**
 	 * Método que inicializa la ejecución del software Spring
 	 * @param args
@@ -31,6 +33,13 @@ public class ConsumingRestApplication {
     }
 
 
+	
+
+    @Bean
+    public RestTemplate restTemplate(RestTemplateBuilder builder) {
+	return builder.build();
+    }
+
 	/**
 	 * Método requestProductoRest, que hace una petición REST a localhost:8080
 	 * con los argumentos que se le pasen y devuelve un objeto producto_record.
@@ -38,16 +47,14 @@ public class ConsumingRestApplication {
 	 * @return producto_record
 	 */
 	private static Producto_record requestProductoRest(String args){
-		Producto_record producto_record = restTemplate.getForObject(
-			String.format("http://localhost:8080/%s", args), Producto_record.class);
-		log.info(producto_record.toString());
+		Producto_record producto_record = null;
+		RestTemplate restTemplate = new RestTemplate();
+		try{
+			producto_record = restTemplate.getForObject(
+				String.format("http://localhost:8080/%s", args), Producto_record.class);
+		}catch(Exception e){ }
 		return producto_record;
 	}
-
-    @Bean
-    public RestTemplate restTemplate(RestTemplateBuilder builder) {
-	return builder.build();
-    }
 
 	/**
 	 * Método run que realiza las interacciones con el usuario final.
@@ -60,11 +67,10 @@ public class ConsumingRestApplication {
 	return args -> {
 		int opcion = 0;
 		Scanner scanner = new Scanner(System.in);
-		boolean salir = false;
 
 		System.out.println("Seleccione una de las siguientes opciones:\n");
-		while(!salir){
-			System.out.println("\n1. Comprar\n2. Lista\n 3. Devolver\n4. Opciones de Administración\n 5. Salir\n");
+		while(true){
+			System.out.println("\n1. Comprar\n2. Lista\n3. Devolver\n4. Opciones de Administración\n5. Salir\n");
 			try{
 			opcion = scanner.nextInt();
 			
@@ -72,24 +78,36 @@ public class ConsumingRestApplication {
 				case 1: // ✔
 					System.out.println("Has seleccionado la opcion de COMPRAR\n");
 					System.out.println("Ingrese el Id del producto que quiera comprar: ");
-					int id_producto_compra = EntradaDatos.nextInt();
+					int id = scanner.nextInt();
 					System.out.println("Ingrese la cantidad del producto a comprar: ");
-					int cantidad_producto_comprar = EntradaDatos.nextInt();
-					if(cantidad_producto_comprar < 0){
+					int cantidad = scanner.nextInt();
+					if(cantidad < 0){
 							System.out.println("No se puede introducir un número negativo\n");      
 					}
 					else{   
-						Producto_record p = requestProductoRest(String.format("/tienda/compra?id=%d&cantidad=0", id));
-						float precio_compra = p.precio;
-						precio_compra = cantidad_producto_comprar*precio_compra;
-						requestProductoRest(String.format("/tienda/compra?id=%d&cantidad=%d", id, cantidad));
-						System.out.println("Se ha efectuado la compra del producto: "+ p.nombre + " con un coste total: "+ precio_compra);
+						Producto_record p = requestProductoRest(String.format("tienda/comprar?id=%d&cantidad=0", id));
+						if (p!=null){
+							float precio_compra = p.precio();
+							precio_compra = cantidad*precio_compra;
+							if(cantidad <= p.cantidad()){
+								requestProductoRest(String.format("tienda/comprar?id=%d&cantidad=%d", id, cantidad));
+								System.out.println("Se ha efectuado la compra del producto: "+ p.nombre() + " con un coste total: "+ precio_compra);
+							}else{
+								System.out.println("No se ha podido efectuar la compra. Se han solicitado más productos de los que hay disponibles ("+cantidad+">"+p.cantidad()+").");
+							}
+						}else{
+							System.out.println("No existe ningún producto con el id "+id);
+						}
 					} 
 					break;
 
-				case 2: // ✔? - Esta lista no me da muy buena espina... - ¿A lo mejor con POST?
+				case 2: // ✔
 					System.out.println("Has seleccionado la opcion de LISTAR PRODUCTOS\n");
-					List<Producto_record> listaProducto = restTemplate.getForObject("http://localhost:8080/tienda/lista", List.class);
+
+					ParameterizedTypeReference<List<Producto>> responseType = new ParameterizedTypeReference<List<Producto>>() {};
+					List<Producto> listaProducto = restTemplate.exchange("http://localhost:8080/tienda/lista", HttpMethod.GET, null, responseType).getBody();
+
+					//List<Producto> listaProducto = restTemplate.getForObject("http://localhost:8080/tienda/lista", List.class);
 					String resultado = "◢__ID__.________NOMBRE________.__PRECIO__._CANTIDAD_◣";
 
 					
@@ -106,23 +124,27 @@ public class ConsumingRestApplication {
 				case 3: // ✔
 					System.out.println("Has seleccionado la opcion de DEVOLVER\n");
 					System.out.println("Ingrese el Id del producto que desea devolver: ");
-					int id_producto_devolver = EntradaDatos.nextInt();
+					int id_producto_devolver = scanner.nextInt();
 					System.out.println("Ingrese la cantidad del producto a devolver: ");
-					int cantidad_producto_devolver = EntradaDatos.nextInt();
+					int cantidad_producto_devolver = scanner.nextInt();
 					if(cantidad_producto_devolver < 0){
 						System.out.println("No se puede introducir un número negativo\n");	
 					}
 					else{
-						Producto_record p = requestProductoRest(String.format("/tienda/compra?id=%d&cantidad=0", id));
-						float precio_devolver = p.precio;
-						precio_devolver = cantidad_producto_devolver*precio_devolver;
-						if(precio_devolver < 0){
-							System.out.println("No se puede introducir un número negativo\n");
-						}
-						else{
-							Producto_record p = requestProductoRest(String.format("/tienda/devolver?id=%d&cantidad=%d", id_producto_devolver, cantidad_producto_devolver));
-							System.out.println("Se ha efectuado la devolución del producto: "+ id_producto_devolver);
-							c.log(fecha+" "+args[3] +" "+"se ha devuelto " + cantidad_producto_devolver+ " del producto con id: "+ id_producto_devolver);
+						Producto_record p = requestProductoRest(String.format("/tienda/comprar?id=%d&cantidad=0", id_producto_devolver));
+						if(p!=null){
+							float precio_devolver = p.precio();
+							precio_devolver = cantidad_producto_devolver*precio_devolver;
+							if(precio_devolver < 0){
+								System.out.println("No se puede introducir un número negativo\n");
+							}
+							else{
+								requestProductoRest(String.format("/tienda/devolver?id=%d&cantidad=%d", id_producto_devolver, cantidad_producto_devolver));
+								System.out.println("Se ha efectuado la devolución del producto: "+ id_producto_devolver);
+								
+							}
+						}else{
+							System.out.println("No existe ningún producto con el id "+id_producto_devolver);
 						}
 					}
 					break;
@@ -139,25 +161,24 @@ public class ConsumingRestApplication {
 						System.out.println("5. Salir\n");
 						try{
 							System.out.println("Elija una de las anteriores opciones:\n");
-							opcion1 = EntradaDatos.nextInt();
+							opcion1 = scanner.nextInt();
 							switch (opcion1) {
 								case 1: // ✔? - no estoy seguro si debería ser Producto o ProductoController
 									System.out.println("Has seleccionado la opcion de INTRODUCIR NUEVO PRODUCTO\n");
-									EntradaDatos.nextLine();
+									scanner.nextLine();
 									System.out.println("Ingrese el nombre del producto a introducir: ");
-									String nombre_producto_introducir = EntradaDatos.nextLine();
+									String nombre = scanner.nextLine();
 									System.out.println("Ingrese la cantidad del producto a introducir: ");
-									int cantidad_producto_introducir = EntradaDatos.nextInt();
+									int cantidad_intr = scanner.nextInt();
 
-									if (cantidad_producto_introducir < 0){
+									if (cantidad_intr < 0){
 										System.out.println("No se puede introducir un número negativo\n");
 									}
 									else{
 										System.out.println("Ingrese el precio del producto a introducir: ");
-										float precio_producto_introducir = EntradaDatos.nextFloat();
-										Producto producto = new Producto(precio_producto_introducir, nombre_producto_introducir, cantidad_producto_introducir, 0);
-										ResponseEntity<String> respuesta = restTemplate.postForObject("http://localhost:8080/tienda/addNewProduc", producto, Producto.Class);
-										System.out.println("Respuesta del servidor: "+ respuesta.toString());
+										float precio = scanner.nextFloat();
+										Producto_record producto = new Producto_record(0, nombre, cantidad_intr, precio);
+										restTemplate.postForObject("http://localhost:8080/tienda/addNewProduc", producto, int.class);
 										
 									}
 									break;
@@ -165,34 +186,36 @@ public class ConsumingRestApplication {
 								case 2: // ✔
 									System.out.println("Has seleccionado la opcion de AÑADIR PRODUCTO\n");
 									System.out.println("Ingrese el Id del producto que quiera añadir: ");
-									int id_producto_añadir = EntradaDatos.nextInt();
+									int id_producto_añadir = scanner.nextInt();
 									System.out.println("Ingrese la cantidad del producto a añadir: ");
-									int cantidad_producto_añadir = EntradaDatos.nextInt();
+									int cantidad_producto_añadir = scanner.nextInt();
 
 									if (cantidad_producto_añadir < 0){
 										System.out.println("No se puede introducir un número negativo\n");
 									}
 									else{
-										Producto_record p = requestProductoRest(String.format("/tienda/compra?id=%d&cantidad=0", id_producto_añadir));
-										Producto producto = new Producto(p.precio, p.nombre, cantidad_producto_añadir, id_producto_añadir);
-										ResponseEntity<String> respuesta = restTemplate.postForObject("http://localhost:8080/tienda/addProd", producto, Producto.Class);
-										System.out.println("Respuesta del servidor: "+ respuesta.toString());
+										Producto_record p = requestProductoRest(String.format("/tienda/comprar?id=%d&cantidad=0", id_producto_añadir));
+										if (p!=null){
+											Producto_record producto = new Producto_record(id_producto_añadir, p.nombre(), cantidad_producto_añadir, p.precio());
+											restTemplate.postForObject("http://localhost:8080/tienda/addProd", producto, Producto_record.class);
+										}else{
+											System.out.println("No existe ningún producto con el id "+id_producto_añadir);
+										}
 									}
 									break;
 
 								case 3: // ✔ - Un poco matar moscas a cañonazos el tener que pasar el producto entero para eliminarlo...
 									System.out.println("Has seleccionado la opcion de ELIMINAR\n");
 									System.out.println("Ingrese el Id del producto que quiera eliminar: ");
-									int id_producto_eliminar = EntradaDatos.nextInt();
-									ResponseEntity<String> respuesta = restTemplate.getForObject(String.format("http://localhost:8080/tienda/cashFlow?id=%d", id_producto_eliminar), ResponseEntity.class);
-									System.out.println("Respuesta del servidor: "+ respuesta.toString());
+									int id_producto_eliminar = scanner.nextInt();
+									restTemplate.getForObject(String.format("http://localhost:8080/tienda/eliminarProd?id=%d", id_producto_eliminar), ResponseEntity.class);
 									break;
 								
 								
 								case 4: // ✔?
 									System.out.println("Has seleccionado la opcion de VER FLUJO DE CAJA\n");
-									ResponseEntity<String> respuesta = restTemplate.getForObject("http://localhost:8080/tienda/cashFlow", ResponseEntity.class);
-									System.out.println("Respuesta del servidor: "+ respuesta.toString());
+									float dinero = restTemplate.getForObject("http://localhost:8080/tienda/cashFlow", float.class);
+									System.out.println(String.format("Dinero en caja: %.2f€.", dinero));
 									break;
 								case 5: // ✔
 									salir_2 = true;
@@ -208,7 +231,7 @@ public class ConsumingRestApplication {
 					}		
 				break;
 				case 5: // ✔
-					salir = true;
+					System.exit(0);
 					break;
 				default: // ✔
 					System.out.println("Solo números entre 1 y 5");
@@ -225,8 +248,4 @@ public class ConsumingRestApplication {
 }
 
 
-/*
-Producto_record producto_record = restTemplate.getForObject(
-								"http://localhost:8080/greeting", Producto_record.class);
-			log.info(producto_record.toString());
- */
+

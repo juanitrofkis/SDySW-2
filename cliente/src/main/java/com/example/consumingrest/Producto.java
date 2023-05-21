@@ -1,40 +1,38 @@
-//acceso a la base de datos 
-
-package com.example.restservice;
+package com.example.producto;
 public class Producto {
     private final float precio;
     private final String nombre;
     private final int cantidad;
     private final int id;
     public Producto(float precio, String nombre, int cantidad, int id) {
-	this.precio = precio;
-	this.nombre = nombre;
-	this.cantidad = cantidad;
-	this.id = id;
+        this.precio = precio;
+        this.nombre = nombre;
+        this.cantidad = cantidad;
+        this.id = id;
     }
     public float getPrecio() {
-	return precio;
+	    return precio;
     }
     public String getNombre() {
-	return nombre;
+	    return nombre;
     }
     public int getCantidad() {
-	return cantidad;
+	    return cantidad;
     }
     public int getId() {
-	return id;
+	    return id;
     }
     public float setPrecio() {
-	return precio;
+	    return precio;
     }
     public String setNombre() {
-	return nombre;
+	    return nombre;
     }
     public int setCantidad() {
-	return cantidad;
+	    return cantidad;
     }
     public int setId() {
-	return id;
+	    return id;
     }
 	
 }

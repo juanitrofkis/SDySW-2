@@ -1,3 +1,4 @@
 com/example/consumingrest/ConsumingRestApplication.class
-com/example/consumingrest/Greeting.class
-com/example/consumingrest/Value.class
+com/example/producto/Producto.class
+com/example/consumingrest/Producto_record.class
+com/example/consumingrest/ConsumingRestApplication$1.class
